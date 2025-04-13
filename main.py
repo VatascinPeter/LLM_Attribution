@@ -20,7 +20,12 @@ def create_ablated_context(ablation_vector, sentences):
 
 # generate all possible ablation vectors - only suitable for very small data
 def all_ablations(length):
-    return [list(p) for p in product([0, 1], repeat=length)]
+    return np.array([list(p) for p in product([0, 1], repeat=length)])
+
+
+# return n random ablation vectors
+def get_ablations(length, n):
+    return all_ablations(length)[np.random.choice(int(np.exp2(length) - 1), size=n, replace=False)]
 
 
 # returns a probability of generating "prompt"
@@ -77,7 +82,8 @@ def get_attributions(model, tokenizer, context, query, response, num_ablations, 
     prompt_template = "Context: {context}\n\nQuery: {query}"
 
     # uniformly sample n ablation vectors, compute logits using ablated context
-    ablation_vectors = all_ablations(len(context))
+    ablation_vectors = get_ablations(len(context), num_ablations)
+    print(ablation_vectors)
     logits = []
     for ablation in ablation_vectors:
         ablated_context = create_ablated_context(ablation, context)
@@ -119,9 +125,9 @@ if __name__ == "__main__":
     Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences [2, 19]. In all but a few cases [27], however, such attention mechanisms are used in conjunction with a recurrent network.
     In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.
     """
-    context = """There were two cars outside the house. They were green. They must have been green."""
+    # context = """There were two cars outside the house. They must have been green. I don't quite remember. Actually, they could have been yellow. I really can't tell"""
     query = "What type of GPUs did the authors use in this paper?"
-    query = "What colour were the cars outside the house?"
+    # query = "What colour were the cars outside the house?"
 
     context_split = nltk.sent_tokenize(context)
 
@@ -143,16 +149,5 @@ if __name__ == "__main__":
     print("Original probability:", get_prob(model, output_ids, response_ids))
     print()
 
-    # for a in ablations:
-    #     ablated_context = create_ablated_context(a, context_split)
-    #     print("Ablated Context:")
-    #     print(ablated_context)
-    #     ablated_prompt = [{"role": "user", "content": prompt_template.format(context=ablated_context, query=query)}]
-    #     ablated_prompt = tokenizer.apply_chat_template(ablated_prompt, tokenize=False, add_generation_prompt=True) + response
-    #     print("Ablated Prompt:")
-    #     print(ablated_prompt)
-    #     ablated_ids = tokenizer.encode(ablated_prompt, return_tensors="pt")
-    #     print("Probability:", get_prob(model, ablated_ids, response_ids))
-    #     print()
-
-    get_attributions(model, tokenizer, context_split, query, response, 5, 0.5)
+    attr = get_attributions(model, tokenizer, context_split, query, response, int(len(context_split)), 0.5)
+    print([(context_split[i], attr[i]) for i in range(len(context_split))])
