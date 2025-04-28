@@ -7,7 +7,7 @@ import numpy as np
 
 
 class Attributor:
-    def __init__(self, model_name: str, context: str, query: str):
+    def __init__(self, model_name: str, context: str, query: str, num_ablations: int = 64, lasso_alpha: float = 0.01,):
         self.model = AutoModelForCausalLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.context = context
@@ -18,6 +18,8 @@ class Attributor:
         self.response = None
         self.response_ids = None
         self.attribution = None
+        self.num_ablations = num_ablations
+        self.lasso_alpha = lasso_alpha
 
     # generate all possible ablation vectors - only suitable for very small data
     def all_ablations(self, length):
@@ -66,7 +68,7 @@ class Attributor:
         # change back to logit
         return sum_log_probs - ch.log1p(-ch.exp(ch.tensor(sum_log_probs))).item()
 
-    def get_attributions(self, num_ablations, reg_lambda):
+    def get_attributions(self):
         """
         Finds which parts of context attribute the most to the response generation
 
@@ -79,34 +81,37 @@ class Attributor:
             self.generate_response()
 
         # uniformly sample n ablation vectors, compute logits using ablated context
-        ablation_vectors = self.get_ablations(len(self.context_split), num_ablations)
-        print(ablation_vectors)
+        ablation_vectors = self.get_ablations(len(self.context_split), self.num_ablations)
+        # print(ablation_vectors)
         logits = []
-        for ablation in ablation_vectors:
+        for i, ablation in enumerate(ablation_vectors):
+            print("Running ablation", i + 1)
             ablated_context = self.create_ablated_context(ablation)
             ablated_prompt = [
                 {"role": "user", "content": self.prompt_template.format(context=ablated_context, query=self.query)}]
             ablated_prompt = self.tokenizer.apply_chat_template(ablated_prompt, tokenize=False,
                                                                 add_generation_prompt=True) + self.response
-            print("Ablated Prompt:")
-            print(ablated_prompt)
+            # print("Ablated Prompt:")
+            # print(ablated_prompt)
             ablated_ids = self.tokenizer.encode(ablated_prompt, return_tensors="pt")
             logits.append(self.get_logit(ablated_ids))
-            print("Logit:", logits[-1])
-            print("Prob from logit:", ch.sigmoid(ch.tensor(logits[-1])).item())
-            print()
+            # print("Logit:", logits[-1])
+            # print("Prob from logit:", ch.sigmoid(ch.tensor(logits[-1])).item())
+            # print()
 
         # learn sparse linear surrogate model - weights will be the attributions
-        clf = Lasso(alpha=reg_lambda)
+        clf = Lasso(alpha=self.lasso_alpha)
         clf.fit(ablation_vectors, logits)
-        print("Lasso Coeficcients:")
-        print(clf.coef_)
+        # print("Lasso Coeficcients:")
+        # print(clf.coef_)
         self.attribution = clf.coef_
         return self.attribution
 
 
 if __name__ == "__main__":
+    # print(ch.cuda.is_available())
     model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    # model_name = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
 
     context = """
 Attention Is All You Need
@@ -122,6 +127,8 @@ In this work we propose the Transformer, a model architecture eschewing recurren
     query = "What type of GPUs did the authors use in this paper?"
 
     attributor = Attributor(model_name, context, query)
-    result = attributor.get_attributions(100, 0.1)
-    index = np.argmax(result)
-    print(print(result[index], attributor.context_split[index]))
+    result = attributor.get_attributions()
+    indices = np.argsort(result)
+    # check fitting, change creation
+    for i in indices:
+        print(result[i], attributor.context_split[i])
