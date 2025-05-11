@@ -4,12 +4,13 @@ import nltk
 from itertools import product
 from sklearn.linear_model import Lasso
 import numpy as np
+from time import time
 
 
 class Attributor:
-    def __init__(self, model_name: str, context: str, query: str, num_ablations: int = 64, lasso_alpha: float = 0.01,):
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+    def __init__(self, model, tokenizer, context: str, query: str, num_ablations: int = 64, lasso_alpha: float = 0.01,):
+        self.model = model
+        self.tokenizer = tokenizer
         self.context = context
         self.query = query
         self.context_split = nltk.sent_tokenize(context)
@@ -20,6 +21,13 @@ class Attributor:
         self.attribution = None
         self.num_ablations = num_ablations
         self.lasso_alpha = lasso_alpha
+
+    @classmethod
+    def from_pretrained(cls, model_name: str, context: str, query: str, num_ablations: int = 64, lasso_alpha: float = 0.01,):
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        return cls(model, tokenizer, context, query, num_ablations, lasso_alpha)
+
 
     # generate all possible ablation vectors - only suitable for very small data
     def all_ablations(self, length):
@@ -52,9 +60,11 @@ class Attributor:
         self.response = self.tokenizer.decode(self.response_ids[0], add_special_tokens=False)
 
     def get_logit(self, prompt):
+        start = time()
         with ch.no_grad():
             output = self.model(prompt)
-
+        end = time()
+        print("Time taken to generate prompt: {:.2f}s".format(end - start))
         logits = output.logits
         log_probs = ch.nn.functional.log_softmax(logits, dim=-1)
 
@@ -111,7 +121,6 @@ class Attributor:
 if __name__ == "__main__":
     # print(ch.cuda.is_available())
     model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-    # model_name = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
 
     context = """
 Attention Is All You Need
@@ -126,9 +135,11 @@ In this work we propose the Transformer, a model architecture eschewing recurren
     """
     query = "What type of GPUs did the authors use in this paper?"
 
-    attributor = Attributor(model_name, context, query)
+    attributor = Attributor.from_pretrained(model_name, context, query)
     result = attributor.get_attributions()
     indices = np.argsort(result)
     # check fitting, change creation
     for i in indices:
         print(result[i], attributor.context_split[i])
+
+    # TODO: implement top-k log drop and LDS - evaluator module

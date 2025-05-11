@@ -4,7 +4,7 @@ import torch
 print(torch.version.cuda)  # This gives the version of CUDA PyTorch was built with
 print(torch.backends.cudnn.version())  # (optional) cuDNN version
 print(torch.cuda.is_available())  # Checks if CUDA is available on your system
-print(torch.cuda.get_device_name(0))  # (if available) Name of the GPU
+# print(torch.cuda.get_device_name(0))  # (if available) Name of the GPU
 
 # model_id = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
 # file_name = "Meta-Llama-3-8B-Instruct.Q6_K.gguf"
@@ -23,6 +23,7 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto",
     quantization_config=bnb_config
 )
+model.to("cuda")
 print("4-bit Quantization with BitsAndBytes Complete")
 
 
