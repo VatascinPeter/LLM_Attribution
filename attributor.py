@@ -17,7 +17,10 @@ class Attributor:
         self.tokenizer = tokenizer
         self.context = context
         self.query = query
-        self.context_split = nltk.sent_tokenize(context)
+        # split the context
+        self.context_split = []
+        for line in self.context.splitlines():
+            self.context_split.extend(nltk.sent_tokenize(line))
         # different datasets might need different templates
         self.prompt_template = "Context: {context}\n\nQuery: {query}"
         self.response = None
@@ -58,9 +61,8 @@ class Attributor:
         prompt = [{"role": "user", "content": self.prompt_template.format(context=self.context, query=self.query)}]
         prompt = self.tokenizer.apply_chat_template(prompt, tokenize=False, add_generation_prompt=True)
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
-
         with ch.no_grad():
-            output_ids = self.model.generate(input_ids, max_new_tokens=512)
+            output_ids = self.model.generate(input_ids, max_new_tokens=512, pad_token_id=self.tokenizer.pad_token_id)
 
         self.response_ids = output_ids[:, input_ids.shape[1]:]
         # self.full_text = self.tokenizer.decode(output_ids[0])

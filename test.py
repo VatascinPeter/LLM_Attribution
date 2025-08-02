@@ -1,8 +1,10 @@
 from accelerate.utils import offload_weight
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from context_cite import ContextCiter
 import torch
 from attributor import Attributor
 from time import time
+from IPython.display import display
 import numpy as np
 print(torch.version.cuda)
 print(torch.backends.cudnn.version())
@@ -74,12 +76,23 @@ In this work we propose the Transformer, a model architecture eschewing recurren
 """
 query = "What type of GPUs did the authors use in this paper?"
 attributor = Attributor(model, tokenizer, context, query, device="cuda", batch_size=1)
-print(attributor.get_response())
+# attributor = ContextCiter(model, tokenizer, context, query)
+# print(attributor.get_response())
+# print(attributor.response)
 start = time()
 result = attributor.get_attributions()
 end = time()
-indices = np.argsort(result)
+# print(attributor.get_attributions(as_dataframe=False))
+print(result)
+print(attributor.context_split)
+# print(attributor.partitioner.get_context())
+# for i in range(attributor.partitioner.num_sources):
+#     print("Source", i)
+#     mask = np.zeros(attributor.partitioner.num_sources, dtype="bool")
+#     mask[i] = True
+#     print(attributor.partitioner.get_context(mask))
+# indices = np.argsort(result)
 # check fitting, change creation
-for i in indices:
-    print(result[i], attributor.context_split[i])
+# for i in indices:
+#     print(result[i], attributor.context_split[i])
 print("Run time:", end-start)
